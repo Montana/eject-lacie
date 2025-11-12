@@ -1,2 +1,45 @@
-# eject-lacie
-When LaCie won't eject. 
+# Eject LaCie 
+
+This script is intended for specific use cases when a LaCie drive may fail to unmount due to a plausibly running process.
+
+## Common Causes
+
+It's a good idea to examine file descriptors in running applications, background I/O operations, or system daemons like `mds` (Spotlight indexing) or `backupd` (Time Machine). 
+
+### Kernel-Level Locks
+
+Kernel-level locks can prevent unmounting when processes have open inodes, when a shell has its current working directory (cwd) set to a path within the mount point, or when system services are writing to `.Spotlight-V100`, `.fseventsd`, or `.Trashes` directories.
+
+### File System Issues
+
+File system issues include journal corruption, unresolved dirty bits in the volume bitmap, bad blocks in the partition table, or filesystem inconsistencies detected by `fsck`. The volume manager may hold references if there are active file mappings (`mmap`), pending write buffers in the page cache, or if the filesystem is part of a RAID or `CoreStorage/APFS` volume group.
+
+### Software Conflicts
+
+Software conflicts arise when `launchd` services, `cfprefsd`, or applications like Dropbox maintain file watches using `FSEvents` or `kqueue` on the mounted volume.
+
+### Hardware Issues
+
+Hardware issues include bus enumeration problems on the `USB/Thunderbolt/FireWire` subsystem, incomplete `SCSI/ATA` command sequences, or the device node (`/dev/diskN`) being in an inconsistent state.
+
+## Usage
+
+Make sure you make the script executable:
+
+```bash
+# make script executable
+chmod +x eject_lacie.sh
+
+# auto-detect LaCie volume, kill blockers, force if needed, pause Spotlight:
+
+sudo ./eject_lacie.sh -k -f -s
+
+# or specify by name/path:
+
+sudo ./eject_lacie.sh -v "LaCie" -k -f -s
+sudo ./eject_lacie.sh -v /Volumes/LaCie -k -f -s
+```
+
+## Author 
+
+Michael Mendy (c) 2025. GPL. 
