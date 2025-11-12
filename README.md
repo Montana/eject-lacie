@@ -1,5 +1,7 @@
 # Eject LaCie 
 
+<img width="1344" height="768" alt="I’m Under This Much Pressure (4)" src="https://github.com/user-attachments/assets/ab2212d5-4d46-4eed-9e13-318df8e8f579" />
+
 This script is intended for specific use cases when a LaCie drive may fail to unmount due to a plausibly running process.
 
 ## Common Causes
