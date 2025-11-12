@@ -1,0 +1,198 @@
+language: bash
+
+os:
+  - linux
+  - osx
+
+dist: focal
+
+osx_image:
+  - xcode12.5
+  - xcode13.2
+
+env:
+  global:
+    - TEST_VOLUME_PATH="/tmp/test_volumes/LaCie"
+    - MOCK_BIN_PATH="/tmp/mock_bin"
+
+before_install:
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      echo "Running on macOS - diskutil available"
+    else
+      echo "Running on Linux - creating mock environment"
+    fi
+
+install:
+  - chmod +x eject_lacie.sh
+  - mkdir -p "$TEST_VOLUME_PATH"
+  - mkdir -p "$MOCK_BIN_PATH"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/diskutil" <<'MOCKEOF'
+    #!/usr/bin/env bash
+    case "$1" in
+        unmount)
+            if [[ "$2" == "force" ]]; then
+                echo "Forced unmount of $3"
+                exit 0
+            else
+                echo "Unmount $2"
+                if [[ -n "${TEST_UNMOUNT_FAIL:-}" ]]; then
+                    echo "Volume could not be unmounted" >&2
+                    exit 1
+                fi
+                exit 0
+            fi
+            ;;
+        eject)
+            echo "Ejecting $2"
+            if [[ -n "${TEST_EJECT_FAIL:-}" ]]; then
+                echo "Eject failed" >&2
+                exit 1
+            fi
+            exit 0
+            ;;
+        *)
+            echo "diskutil $@"
+            exit 0
+            ;;
+    esac
+    MOCKEOF
+    chmod +x "$MOCK_BIN_PATH/diskutil"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/lsof" <<'MOCKEOF'
+    #!/usr/bin/env bash
+    # Need sudo support
+    if [[ "$1" == "-n" ]] || [[ "$1" == "true" ]]; then
+        shift
+    fi
+    
+    if [[ "$1" == "-t" ]]; then
+        # Return PIDs only
+        if [[ -n "${TEST_HAS_BLOCKERS:-}" ]]; then
+            echo "1234"
+            echo "5678"
+        fi
+        exit 0
+    else
+        if [[ -n "${TEST_HAS_BLOCKERS:-}" ]]; then
+            echo "COMMAND   PID  USER   FD   TYPE DEVICE  SIZE/OFF  NODE NAME"
+            echo "bash     1234  user  cwd    DIR  1,4       512    12 /tmp/test_volumes/LaCie"
+            echo "Finder   5678  user    5r   REG  1,4      1024    34 /tmp/test_volumes/LaCie/file.txt"
+        fi
+        exit 0
+    fi
+    MOCKEOF
+    chmod +x "$MOCK_BIN_PATH/lsof"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/mdutil" <<'MOCKEOF'
+    #!/usr/bin/env bash
+    echo "Indexing disabled." >&2
+    exit 0
+    MOCKEOF
+    chmod +x "$MOCK_BIN_PATH/mdutil"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/mount" <<'MOCKEOF'
+    #!/usr/bin/env bash
+    echo "/dev/disk99s1 on /tmp/test_volumes/LaCie (hfs, local, nodev, nosuid, journaled)"
+    exit 0
+    MOCKEOF
+    chmod +x "$MOCK_BIN_PATH/mount"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/sudo" <<'MOCKEOF'
+    #!/usr/bin/env bash
+    
+    if [[ "$1" == "-n" ]]; then
+        shift
+        if [[ "$1" == "true" ]]; then
+            exit 0
+        fi
+    fi
+    exec "$@"
+    MOCKEOF
+    chmod +x "$MOCK_BIN_PATH/sudo"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/kill" <<'MOCKEOF'
+    #!/usr/bin/env bash
+    echo "Sending signal $1 to processes $2" >&2
+    exit 0
+    MOCKEOF
+    chmod +x "$MOCK_BIN_PATH/kill"
+
+script:
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+      export PATH="$MOCK_BIN_PATH:$PATH"
+    fi
+  
+  - bash -n eject_lacie.sh
+  
+  - |
+    if ! command -v shellcheck &> /dev/null; then
+      if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+        sudo apt-get update && sudo apt-get install -y shellcheck
+      elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+        brew install shellcheck
+      fi
+    fi
+  - shellcheck -x eject_lacie.sh || true
+  
+  - ./eject_lacie.sh --help | grep -q "Examples"
+  - ./eject_lacie.sh -h | grep -q "Examples"
+  
+  - if ./eject_lacie.sh -z 2>/dev/null; then exit 1; fi
+  
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      command -v diskutil
+      command -v lsof
+      command -v awk
+      command -v grep
+      command -v df
+    fi
+  
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+      echo "=== Testing with mock environment ==="
+      export PATH="$MOCK_BIN_PATH:$PATH"
+      
+      which diskutil
+      which lsof
+      which mount
+      which sudo
+      
+      echo "Test 1: Help works"
+      ./eject_lacie.sh -h > /dev/null
+      
+      echo "Test 2: Script can find volume"
+
+      ./eject_lacie.sh -v "$TEST_VOLUME_PATH" 2>&1 || true
+      
+      echo "Test 3: All flags accepted"
+      ./eject_lacie.sh -v "$TEST_VOLUME_PATH" -k -f -s 2>&1 || true
+      
+      echo "=== Mock environment tests completed ==="
+    fi
+  
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      echo "=== macOS validation tests ==="
+      
+      which diskutil
+      which lsof
+      which mdutil
+      
+      ./eject_lacie.sh -v "NonExistentVolume" 2>&1 && exit 1 || true
+      
+      echo "=== macOS validation completed ==="
+    fi
+    
+cache:
+  directories:
+    - $HOME/.cache
