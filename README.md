@@ -18,6 +18,8 @@ File system issues include journal corruption, unresolved dirty bits in the volu
 
 Software conflicts arise when `launchd` services, `cfprefsd`, or applications like Dropbox maintain file watches using `FSEvents` or `kqueue` on the mounted volume.
 
+![fstab-mount-failure-diagram](https://github.com/user-attachments/assets/97a52cc6-eebd-4c6c-8957-2d1d8391bbf6)<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1400">
+
 ### Hardware Issues
 
 Hardware issues include bus enumeration problems on the `USB/Thunderbolt/FireWire` subsystem, incomplete `SCSI/ATA` command sequences, or the device node (`/dev/diskN`) being in an inconsistent state.
