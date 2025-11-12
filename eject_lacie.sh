@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 
-# by michael mendy (c) 2025. 
+# by michael mendy (c) 2025.
 
 set -euo pipefail
 
-VOL_INPUT=""
-KILL_BLOCKERS=0
-USE_FORCE=0
-PAUSE_SPOTLIGHT=0
+vol_input=""
+kill_blockers=0
+use_force=0
+pause_spotlight=0
+dry_run=0
+quiet=0
+retries=1
 
-need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1" >&2; exit 1; }; }
+need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "missing required command: $1" >&2; exit 1; }; }
 
 print_help() {
   cat <<'EOF'
@@ -20,15 +23,23 @@ Examples:
 EOF
 }
 
-while getopts ":v:kfsh" opt; do
+log() {
+  [ "$quiet" -eq 1 ] && return 0
+  printf '%s\n' "$*"
+}
+
+while getopts ":v:kfshnr:q" opt; do
   case "$opt" in
-    v) VOL_INPUT="$OPTARG" ;;
-    k) KILL_BLOCKERS=1 ;;
-    f) USE_FORCE=1 ;;
-    s) PAUSE_SPOTLIGHT=1 ;;
+    v) vol_input="$OPTARG" ;;
+    k) kill_blockers=1 ;;
+    f) use_force=1 ;;
+    s) pause_spotlight=1 ;;
+    n) dry_run=1 ;;
+    r) retries="$OPTARG" ;;
+    q) quiet=1 ;;
     h) print_help; exit 0 ;;
-    \?) echo "Invalid option: -$OPTARG" >&2; print_help; exit 2 ;;
-    :) echo "Option -$OPTARG requires an argument." >&2; exit 2 ;;
+    \?) echo "invalid option: -$OPTARG" >&2; print_help; exit 2 ;;
+    :) echo "option -$OPTARG requires an argument." >&2; exit 2 ;;
   esac
 done
 
@@ -74,19 +85,27 @@ get_device_from_mount() {
 
 spotlight_disable() {
   if command -v mdutil >/dev/null 2>&1; then
-    mdutil -i off "$1" >/dev/null 2>&1 || true
+    if [ "$dry_run" -eq 1 ]; then
+      log "[dry-run] would disable spotlight on $1"
+    else
+      mdutil -i off "$1" >/dev/null 2>&1 || true
+    fi
   fi
 }
 
 spotlight_enable() {
   if command -v mdutil >/dev/null 2>&1; then
-    mdutil -i on "$1" >/dev/null 2>&1 || true
+    if [ "$dry_run" -eq 1 ]; then
+      log "[dry-run] would re-enable spotlight on $1"
+    else
+      mdutil -i on "$1" >/dev/null 2>&1 || true
+    fi
   fi
 }
 
 show_blockers() {
   if ! sudo -n true 2>/dev/null; then
-    echo "Note: not running with sudo; lsof may miss some processes."
+    log "note: not running with sudo; lsof may miss some processes."
   fi
   sudo lsof +f -- "$1" || true
 }
@@ -95,6 +114,13 @@ kill_blockers() {
   local pids
   pids=$(sudo lsof -t +f -- "$1" | sort -u || true)
   [ -z "$pids" ] && return 0
+
+  if [ "$dry_run" -eq 1 ]; then
+    log "[dry-run] would send sigterm to pids: $pids"
+    log "[dry-run] would send sigkill to remaining pids if needed"
+    return 0
+  fi
+
   sudo kill -15 $pids 2>/dev/null || true
   sleep 2
   pids=$(sudo lsof -t +f -- "$1" | sort -u || true)
@@ -104,56 +130,93 @@ kill_blockers() {
 }
 
 unmount_try() {
+  if [ "$dry_run" -eq 1 ]; then
+    log "[dry-run] would run: diskutil unmount \"$1\""
+    return 0
+  fi
   diskutil unmount "$1"
 }
 
 unmount_force_try() {
+  if [ "$dry_run" -eq 1 ]; then
+    log "[dry-run] would run: diskutil unmount force \"$1\""
+    return 0
+  fi
   diskutil unmount force "$1"
 }
 
 eject_device() {
   [ -z "${1:-}" ] && return 1
+  if [ "$dry_run" -eq 1 ]; then
+    log "[dry-run] would run: diskutil eject \"$1\""
+    return 0
+  fi
   diskutil eject "$1"
 }
 
-main() {
-  local mount_path devnode
+show_volume_info() {
+  local mount_path="$1"
+  log "volume info for $mount_path:"
+  df -h "$mount_path" | awk 'NR==1 || NR==2 {print "  "$0}'
+}
 
-  if ! mount_path=$(resolve_volume_mount "$VOL_INPUT"); then
-    echo "Could not find a LaCie volume. Try -v 'LaCie' or -v /Volumes/LaCie" >&2
+main() {
+  local mount_path devnode attempt
+
+  if ! mount_path=$(resolve_volume_mount "$vol_input"); then
+    echo "could not find a lacie volume. try -v 'LaCie' or -v /Volumes/LaCie" >&2
     exit 1
   fi
 
   devnode=$(get_device_from_mount "$mount_path" || true)
 
-  [ "$PAUSE_SPOTLIGHT" -eq 1 ] && spotlight_disable "$mount_path"
+  log "target mount: $mount_path"
+  [ -n "$devnode" ] && log "device node: $devnode"
 
+  show_volume_info "$mount_path"
+
+  [ "$pause_spotlight" -eq 1 ] && spotlight_disable "$mount_path"
+
+  log "checking for open files on $mount_path..."
   show_blockers "$mount_path"
 
   if ! unmount_try "$mount_path"; then
-    if [ "$KILL_BLOCKERS" -eq 1 ]; then
+    if [ "$kill_blockers" -eq 1 ]; then
+      log "unmount failed, attempting to kill blockers..."
       kill_blockers "$mount_path"
     fi
-    if [ "$USE_FORCE" -eq 1 ]; then
+    if [ "$use_force" -eq 1 ]; then
+      log "attempting force unmount..."
       unmount_force_try "$mount_path" || {
-        [ "$PAUSE_SPOTLIGHT" -eq 1 ] && spotlight_enable "$mount_path"
+        [ "$pause_spotlight" -eq 1 ] && spotlight_enable "$mount_path"
         exit 1
       }
     else
-      echo "Normal unmount failed. Re-run with -f to force and/or -k to kill blockers." >&2
-      [ "$PAUSE_SPOTLIGHT" -eq 1 ] && spotlight_enable "$mount_path"
+      echo "normal unmount failed. re-run with -f to force and/or -k to kill blockers." >&2
+      [ "$pause_spotlight" -eq 1 ] && spotlight_enable "$mount_path"
       exit 2
     fi
   fi
 
-  if ! eject_device "$devnode"; then
-    echo "Eject failed. Ensure no background services are re-mounting it (Time Machine, backups, media indexers)." >&2
-    [ "$PAUSE_SPOTLIGHT" -eq 1 ] && spotlight_enable "$mount_path"
-    exit 3
-  fi
+  attempt=1
+  while :; do
+    if eject_device "$devnode"; then
+      break
+    fi
 
-  [ "$PAUSE_SPOTLIGHT" -eq 1 ] && spotlight_enable "$mount_path"
-  echo "Done."
+    if [ "$attempt" -ge "$retries" ]; then
+      echo "eject failed after $retries attempt(s). ensure no background services are re-mounting it (time machine, backups, media indexers)." >&2
+      [ "$pause_spotlight" -eq 1 ] && spotlight_enable "$mount_path"
+      exit 3
+    fi
+
+    log "eject failed (attempt $attempt), retrying..."
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+
+  [ "$pause_spotlight" -eq 1 ] && spotlight_enable "$mount_path"
+  log "done."
 }
 
 main "$@"
