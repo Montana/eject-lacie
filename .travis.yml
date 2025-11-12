@@ -5,6 +5,76 @@ os:
 
 dist: focal
 
+env:
+  global:
+    - TEST_VOLUME_PATH="/tmp/test_volumes/LaCie"
+    - MOCK_BIN_PATH="/tmp/mock_bin"
+
+install:
+  - chmod +x eject_lacie.sh
+  - mkdir -p "$TEST_VOLUME_PATH"
+  - mkdir -p "$MOCK_BIN_PATH"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/diskutil" <<'EOF'
+    #!/usr/bin/env bash
+    case "$1" in
+        unmount)
+            if [[ "$2" == "force" ]]; then
+                echo "Forced unmount of $3"
+            else
+                echo "Unmount $2"
+            fi
+            exit 0
+            ;;
+        eject)
+            echo "Ejecting $2"
+            exit 0
+            ;;
+        *)
+            exit 0
+            ;;
+    esac
+    EOF
+    chmod +x "$MOCK_BIN_PATH/diskutil"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/lsof" <<'EOF'
+    #!/usr/bin/env bash
+    exit 0
+    EOF
+    chmod +x "$MOCK_BIN_PATH/lsof"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/mount" <<'EOF'
+    #!/usr/bin/env bash
+    echo "/dev/disk99s1 on /tmp/test_volumes/LaCie (hfs, local)"
+    exit 0
+    EOF
+    chmod +x "$MOCK_BIN_PATH/mount"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/sudo" <<'EOF'
+    #!/usr/bin/env bash
+    if [[ "$1" == "-n" ]]; then
+        shift
+        [[ "$1" == "true" ]] && exit 0
+    fi
+    exec "$@"
+    EOF
+    chmod +x "$MOCK_BIN_PATH/sudo"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/mdutil" <<'EOF'
+    #!/usr/bin/env bash
+    exit 0
+    EOF
+    chmod +x "$MOCK_BIN_PATH/mdutil"
+
 script:
-  - bash -n eject_lacie.sh || true
-  - ./eject_lacie.sh -h || true
+  - export PATH="$MOCK_BIN_PATH:$PATH"
+  - bash -n eject_lacie.sh
+  - ./eject_lacie.sh -h | grep -q "Examples"
+  - if ./eject_lacie.sh -z 2>/dev/null; then exit 1; fi
+  - ./eject_lacie.sh -v "$TEST_VOLUME_PATH" || true
+  - echo "All tests passed"
