@@ -45,6 +45,11 @@ sudo ./eject_lacie.sh -k -f -s
 sudo ./eject_lacie.sh -v "LaCie" -k -f -s
 sudo ./eject_lacie.sh -v /Volumes/LaCie -k -f -s
 ```
+You should see something similar if the LaCie drive ejected correctly: 
+
+<img width="749" height="488" alt="Screenshot 2025-11-12 at 2 02 41 PM" src="https://github.com/user-attachments/assets/d78052a6-009a-442c-879b-81d773665cd5" />
+
+Enjoy. Contribs are welcome. 
 
 ## Author 
 
