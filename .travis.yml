@@ -18,9 +18,9 @@ env:
 before_install:
   - |
     if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
-      echo "Running on macOS - diskutil available"
+      echo "Running on macOS"
     else
-      echo "Running on Linux - creating mock environment"
+      echo "Running on Linux"
     fi
 
 install:
@@ -64,13 +64,11 @@ install:
   - |
     cat > "$MOCK_BIN_PATH/lsof" <<'MOCKEOF'
     #!/usr/bin/env bash
-    # Need sudo support
     if [[ "$1" == "-n" ]] || [[ "$1" == "true" ]]; then
         shift
     fi
     
     if [[ "$1" == "-t" ]]; then
-        # Return PIDs only
         if [[ -n "${TEST_HAS_BLOCKERS:-}" ]]; then
             echo "1234"
             echo "5678"
@@ -106,7 +104,6 @@ install:
   - |
     cat > "$MOCK_BIN_PATH/sudo" <<'MOCKEOF'
     #!/usr/bin/env bash
-    
     if [[ "$1" == "-n" ]]; then
         shift
         if [[ "$1" == "true" ]]; then
@@ -120,10 +117,16 @@ install:
   - |
     cat > "$MOCK_BIN_PATH/kill" <<'MOCKEOF'
     #!/usr/bin/env bash
-    echo "Sending signal $1 to processes $2" >&2
     exit 0
     MOCKEOF
     chmod +x "$MOCK_BIN_PATH/kill"
+  
+  - |
+    cat > "$MOCK_BIN_PATH/sleep" <<'MOCKEOF'
+    #!/usr/bin/env bash
+    exit 0
+    MOCKEOF
+    chmod +x "$MOCK_BIN_PATH/sleep"
 
 script:
   - |
@@ -159,40 +162,24 @@ script:
   
   - |
     if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-      echo "=== Testing with mock environment ==="
       export PATH="$MOCK_BIN_PATH:$PATH"
-      
       which diskutil
       which lsof
       which mount
       which sudo
-      
-      echo "Test 1: Help works"
       ./eject_lacie.sh -h > /dev/null
-      
-      echo "Test 2: Script can find volume"
-
       ./eject_lacie.sh -v "$TEST_VOLUME_PATH" 2>&1 || true
-      
-      echo "Test 3: All flags accepted"
       ./eject_lacie.sh -v "$TEST_VOLUME_PATH" -k -f -s 2>&1 || true
-      
-      echo "=== Mock environment tests completed ==="
     fi
   
   - |
     if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
-      echo "=== macOS validation tests ==="
-      
       which diskutil
       which lsof
       which mdutil
-      
       ./eject_lacie.sh -v "NonExistentVolume" 2>&1 && exit 1 || true
-      
-      echo "=== macOS validation completed ==="
     fi
-    
+
 cache:
   directories:
     - $HOME/.cache
