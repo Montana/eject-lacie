@@ -14,6 +14,10 @@ Kernel-level locks can prevent unmounting when processes have open inodes, when 
 
 File system issues include journal corruption, unresolved dirty bits in the volume bitmap, bad blocks in the partition table, or filesystem inconsistencies detected by `fsck`. The volume manager may hold references if there are active file mappings (`mmap`), pending write buffers in the page cache, or if the filesystem is part of a RAID or `CoreStorage/APFS` volume group.
 
+<img width="1571" height="980" alt="output (25)" src="https://github.com/user-attachments/assets/2e3525e5-a851-40cf-be28-0a030d920f40" />
+
+<br>_The chart displays how long it took to eject or unmount the LaCie drive across several attempts. The `X-axis`, labeled “Unmount Attempt,” lists each attempt in order from the first to the fifth, while the `Y-axis`, labeled “Time (seconds),” shows how long each attempt took. The lime-green line represents those durations, and the shaded area beneath it visually emphasizes the trend, illustrating how eject times changed over successive attempts._</br>
+
 ### Software Conflicts
 
 Software conflicts arise when `launchd` services, `cfprefsd`, or applications like Dropbox maintain file watches using `FSEvents` or `kqueue` on the mounted volume.
