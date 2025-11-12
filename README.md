@@ -28,7 +28,9 @@ File system issues include journal corruption, unresolved dirty bits in the volu
 
 Software conflicts arise when `launchd` services, `cfprefsd`, or applications like Dropbox maintain file watches using `FSEvents` or `kqueue` on the mounted volume.
 
-![fstab-mount-failure-diagram](https://github.com/user-attachments/assets/97a52cc6-eebd-4c6c-8957-2d1d8391bbf6)<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1400">
+<img width="1570" height="980" alt="output (27)" src="https://github.com/user-attachments/assets/d1734621-6607-4c1e-a5e7-c66a970fdd32" />
+
+<br> _This chart shows the severity of software conflicts across five different instances, with each conflict labeled along the `X-axis` and its severity rated on a 1–5 scale along the `Y-axis`. The lavender line illustrates how the severity levels rise and fall between conflicts, while the filled lavender area underneath emphasizes the overall trend visually. In this example, Conflict 4 appears to be the most severe, Conflict 3 the least severe, and the remaining conflicts fall in the middle, giving you a clear visual snapshot of how impactful each issue was over time._ </br>
 
 ### Hardware Issues
 
