@@ -53,7 +53,7 @@ sudo ./eject_lacie.sh -k -f -s
 sudo ./eject_lacie.sh -v "LaCie" -k -f -s
 sudo ./eject_lacie.sh -v /Volumes/LaCie -k -f -s
 ```
-Enjoy. Contribs are welcome. 
+Enjoy. Contributions are generally welcomed. 
 
 ## Author 
 
