@@ -10,6 +10,10 @@ It's a good idea to examine file descriptors in running applications, background
 
 Kernel-level locks can prevent unmounting when processes have open inodes, when a shell has its current working directory (cwd) set to a path within the mount point, or when system services are writing to `.Spotlight-V100`, `.fseventsd`, or `.Trashes` directories.
 
+<img width="1769" height="980" alt="output (26)" src="https://github.com/user-attachments/assets/5dd75628-6f9c-4179-b493-e095526ee1d1" />
+
+<br> _This chart illustrates the time it took to eject the LaCie drive across six attempts, along with the likely cause of delay for each one. The x-axis lists each unmount attempt in order from the first through the sixth, while the y-axis measures the eject time in seconds._ </br> 
+
 ### File System Issues
 
 File system issues include journal corruption, unresolved dirty bits in the volume bitmap, bad blocks in the partition table, or filesystem inconsistencies detected by `fsck`. The volume manager may hold references if there are active file mappings (`mmap`), pending write buffers in the page cache, or if the filesystem is part of a RAID or `CoreStorage/APFS` volume group.
